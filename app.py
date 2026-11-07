@@ -53,7 +53,6 @@ h1, h2, h3 {
 
 # ---------------- TMDB POSTER FUNCTION ----------------
 
-
 @st.cache_data(ttl=86400)
 def get_movie_poster(title):
 
@@ -79,9 +78,7 @@ def get_movie_poster(title):
             "accept": "application/json"
         }
 
-        params = {
-            "query": search_title
-        }
+        params = {"query": search_title}
 
         if year:
             params["year"] = year
@@ -94,7 +91,6 @@ def get_movie_poster(title):
         )
 
         response.raise_for_status()
-
         data = response.json()
 
         if data.get("results"):
@@ -111,18 +107,6 @@ def get_movie_poster(title):
 
     except Exception as e:
         print("TMDB ERROR:", repr(e))
-        return None
-
-
-    except Exception as e:
-        print("TMDB ERROR:", repr(e))
-        return None
-
-    except Exception as e:
-
-        # Print the actual error in the VS Code terminal
-        print("TMDB ERROR:", repr(e))
-
         return None
 
 
@@ -216,6 +200,78 @@ with st.expander("📚 Mathematical Concepts Used"):
     )
 
 
+# ---------------- BROWSE BY GENRE ----------------
+
+st.divider()
+
+st.header("🎭 Browse Movies by Genre")
+
+st.write(
+    "Explore movies from your favourite categories!"
+)
+
+if "genres" in movies.columns:
+
+    # Extract all available genres from the dataset
+    all_genres = sorted({
+        genre
+        for genre_list in movies["genres"].dropna()
+        for genre in str(genre_list).split("|")
+        if genre and genre != "(no genres listed)"
+    })
+
+    selected_genre = st.selectbox(
+        "Choose a genre:",
+        all_genres,
+        key="genre_selector"
+    )
+
+    # Filter movies belonging to the selected genre
+    genre_movies = movies[
+        movies["genres"].fillna("").apply(
+            lambda x: selected_genre in str(x).split("|")
+        )
+    ].sort_values("title")
+
+    st.subheader(f"🍿 {selected_genre} Movies")
+
+    st.write(
+        f"Found {len(genre_movies)} movies in this genre."
+    )
+
+    # Display the first 12 movies
+    genre_movies = genre_movies.head(12)
+
+    # Display movies in three columns
+    columns = st.columns(3)
+
+    for index, (_, movie) in enumerate(genre_movies.iterrows()):
+
+        title = str(movie["title"])
+
+        with columns[index % 3]:
+
+            poster = get_movie_poster(title)
+
+            if not poster:
+                poster = poster_urls.get(title)
+
+            if poster:
+                st.image(poster, use_container_width=True)
+            else:
+                st.info("Poster unavailable")
+
+            st.markdown(
+                f"**{html.escape(title)}**"
+            )
+
+else:
+
+    st.warning(
+        "Genre information is unavailable in the movie dataset."
+    )
+
+
 # ---------------- USER INPUT ----------------
 
 st.divider()
@@ -226,7 +282,8 @@ movie_list = movies["title"].tolist()
 
 selected_movie = st.selectbox(
     "Choose a movie you like:",
-    movie_list
+    movie_list,
+    key="recommendation_movie"
 )
 
 user_id = st.number_input(
@@ -300,10 +357,8 @@ if st.session_state.recommendations is not None:
             f"### 🎬 {html.escape(title)}"
         )
 
-        # Try TMDB first
         poster = get_movie_poster(title)
 
-        # Try backup poster if TMDB has no result
         if not poster:
             poster = poster_urls.get(title)
 
