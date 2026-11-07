@@ -125,6 +125,72 @@ def get_movie_poster(title):
         return None
 
 
+# ---------------- TMDB MOVIE DETAILS FUNCTION ----------------
+
+@st.cache_data(ttl=86400)
+def get_movie_details(title):
+
+    try:
+        api_key = st.secrets["TMDB_API_KEY"]
+
+        year_match = re.search(r"\((\d{4})\)$", title)
+        year = year_match.group(1) if year_match else None
+
+        search_title = re.sub(r"\s*\(\d{4}\)$", "", title)
+
+        if ", The" in search_title:
+            search_title = "The " + search_title.replace(", The", "")
+        elif ", A" in search_title:
+            search_title = "A " + search_title.replace(", A", "")
+        elif ", An" in search_title:
+            search_title = "An " + search_title.replace(", An", "")
+
+        url = "https://api.themoviedb.org/3/search/movie"
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "accept": "application/json"
+        }
+
+        params = {"query": search_title}
+
+        if year:
+            params["year"] = year
+
+        response = requests.get(
+            url,
+            headers=headers,
+            params=params,
+            timeout=10
+        )
+
+        response.raise_for_status()
+        results = response.json().get("results", [])
+
+        if results:
+            movie = results[0]
+
+            poster_path = movie.get("poster_path")
+
+            poster = (
+                "https://image.tmdb.org/t/p/w500" + poster_path
+                if poster_path else None
+            )
+
+            return {
+                "overview": movie.get("overview") or "Overview unavailable.",
+                "release_date": movie.get("release_date") or "Unknown",
+                "rating": movie.get("vote_average"),
+                "poster": poster
+            }
+
+        return None
+
+    except Exception as e:
+        print("TMDB DETAILS ERROR:", repr(e))
+        return None
+
+
 # ---------------- BACKUP POSTERS ----------------
 
 poster_urls = {
@@ -370,13 +436,111 @@ else:
     )
 
 
+# ---------------- MOVIE DETAILS ----------------
+
+st.divider()
+
+st.header("🎞️ Movie Details")
+
+st.write(
+    "Want to know more about a movie? Select one below!"
+)
+
+movie_list = movies["title"].tolist()
+
+details_movie = st.selectbox(
+    "Choose a movie to explore:",
+    movie_list,
+    key="details_movie"
+)
+
+if st.button("🔍 Show Movie Details"):
+
+    st.session_state.show_movie_details = True
+
+if "show_movie_details" not in st.session_state:
+    st.session_state.show_movie_details = False
+
+if st.session_state.show_movie_details:
+
+    selected_details = movies[
+        movies["title"] == details_movie
+    ]
+
+    if not selected_details.empty:
+
+        movie_row = selected_details.iloc[0]
+
+        details = get_movie_details(details_movie)
+
+        detail_columns = st.columns([1, 2])
+
+        with detail_columns[0]:
+
+            poster = None
+
+            if details:
+                poster = details.get("poster")
+
+            if not poster:
+                poster = get_movie_poster(details_movie)
+
+            if not poster:
+                poster = poster_urls.get(details_movie)
+
+            if poster:
+                st.image(
+                    poster,
+                    use_container_width=True
+                )
+            else:
+                st.info("Poster unavailable")
+
+        with detail_columns[1]:
+
+            st.subheader(details_movie)
+
+            year_match = re.search(
+                r"\((\d{4})\)$",
+                details_movie
+            )
+
+            if details and details.get("release_date") != "Unknown":
+                release_year = details["release_date"][:4]
+            elif year_match:
+                release_year = year_match.group(1)
+            else:
+                release_year = "Unknown"
+
+            st.write(f"📅 **Release Year:** {release_year}")
+
+            genres = str(movie_row["genres"]).replace("|", ", ")
+
+            st.write(f"🎭 **Genres:** {genres}")
+
+            st.markdown("### 📝 Overview")
+
+            if details:
+                st.write(details["overview"])
+
+                rating = details.get("rating")
+
+                if rating is not None:
+                    st.write(
+                        f"⭐ **TMDB Rating:** {rating:.1f}/10"
+                    )
+
+            else:
+                st.info(
+                    "Additional movie information is currently unavailable."
+                )
+
+
 # ---------------- USER INPUT ----------------
 
 st.divider()
 
 st.subheader("🍿 Find Your Next Favourite Movie")
-
-movie_list = movies["title"].tolist()
 
 selected_movie = st.selectbox(
     "Choose a movie you like:",
