@@ -3,6 +3,7 @@ import streamlit as st
 import html
 import requests
 import re
+import pandas as pd
 
 from hybrid import recommend_hybrid, load_model
 
@@ -206,6 +207,27 @@ def get_movie_details(title):
         return None
 
 
+# ---------------- LOAD MOVIELENS RATINGS ----------------
+
+@st.cache_data
+def load_movie_ratings():
+
+    ratings = pd.read_csv(
+        "Dataset/ratings.dat",
+        sep="::",
+        engine="python",
+        names=["user_id", "movie_id", "rating", "timestamp"],
+        encoding="latin-1"
+    )
+
+    rating_summary = ratings.groupby("movie_id").agg(
+        average_rating=("rating", "mean"),
+        rating_count=("rating", "count")
+    ).reset_index()
+
+    return rating_summary
+
+
 # ---------------- BACKUP POSTERS ----------------
 
 poster_urls = {
@@ -220,6 +242,22 @@ poster_urls = {
 # ---------------- LOAD DATA ----------------
 
 movies, _, _, _ = load_model()
+
+rating_summary = load_movie_ratings()
+
+movies = movies.merge(
+    rating_summary,
+    on="movie_id",
+    how="left"
+)
+
+movies["average_rating"] = movies["average_rating"].fillna(0)
+movies["rating_count"] = movies["rating_count"].fillna(0)
+
+movies["year"] = pd.to_numeric(
+    movies["title"].str.extract(r"\((\d{4})\)$")[0],
+    errors="coerce"
+)
 
 
 # ---------------- HEADING ----------------
@@ -350,6 +388,7 @@ if search_query.strip():
 
                 st.markdown(f"**{html.escape(title)}**")
 
+
     else:
         st.warning("No movies found. Try another movie title!")
 
@@ -432,6 +471,200 @@ if "genres" in movies.columns:
 
 else:
     st.warning("Genre information is unavailable in the movie dataset.")
+
+
+# ---------------- MOVIE FILTERS ----------------
+
+st.divider()
+
+st.header("🎛️ Discover Movies with Filters")
+
+st.write(
+    "Customize your movie discovery experience "
+    "using genres, release years, and ratings!"
+)
+
+filter_columns = st.columns(2)
+
+with filter_columns[0]:
+
+    selected_filter_genres = st.multiselect(
+        "🎭 Choose genres",
+        all_genres,
+        placeholder="Select one or more genres",
+        key="filter_genres"
+    )
+
+with filter_columns[1]:
+
+    sort_option = st.selectbox(
+        "↕️ Sort movies by",
+        [
+            "Highest Rated",
+            "Lowest Rated",
+            "Newest First",
+            "Oldest First",
+            "Alphabetical (A-Z)",
+            "Alphabetical (Z-A)"
+        ],
+        key="filter_sort"
+    )
+
+valid_years = movies["year"].dropna()
+
+if not valid_years.empty:
+
+    min_year = int(valid_years.min())
+    max_year = int(valid_years.max())
+
+    selected_years = st.slider(
+        "📅 Select release year range",
+        min_value=min_year,
+        max_value=max_year,
+        value=(min_year, max_year),
+        key="filter_years"
+    )
+
+else:
+    selected_years = (1900, 2026)
+
+minimum_rating = st.slider(
+    "⭐ Minimum average MovieLens rating",
+    min_value=0.0,
+    max_value=5.0,
+    value=0.0,
+    step=0.5,
+    key="minimum_rating"
+)
+
+# Start with all movies
+filtered_movies = movies.copy()
+
+# Genre filtering
+if selected_filter_genres:
+
+    filtered_movies = filtered_movies[
+        filtered_movies["genres"].fillna("").apply(
+            lambda genres: any(
+                genre in str(genres).split("|")
+                for genre in selected_filter_genres
+            )
+        )
+    ]
+
+# Release year filtering
+filtered_movies = filtered_movies[
+    filtered_movies["year"].between(
+        selected_years[0],
+        selected_years[1]
+    )
+]
+
+# Minimum rating filtering
+filtered_movies = filtered_movies[
+    filtered_movies["average_rating"] >= minimum_rating
+]
+
+# Sorting
+if sort_option == "Highest Rated":
+
+    filtered_movies = filtered_movies.sort_values(
+        ["average_rating", "rating_count"],
+        ascending=[False, False]
+    )
+
+elif sort_option == "Lowest Rated":
+
+    filtered_movies = filtered_movies[
+        filtered_movies["rating_count"] > 0
+    ].sort_values("average_rating", ascending=True)
+
+elif sort_option == "Newest First":
+
+    filtered_movies = filtered_movies.sort_values(
+        "year",
+        ascending=False,
+        na_position="last"
+    )
+
+elif sort_option == "Oldest First":
+
+    filtered_movies = filtered_movies.sort_values(
+        "year",
+        ascending=True,
+        na_position="last"
+    )
+
+elif sort_option == "Alphabetical (A-Z)":
+
+    filtered_movies = filtered_movies.sort_values(
+        "title",
+        ascending=True
+    )
+
+elif sort_option == "Alphabetical (Z-A)":
+
+    filtered_movies = filtered_movies.sort_values(
+        "title",
+        ascending=False
+    )
+
+st.markdown("---")
+
+st.subheader("🎬 Your Filtered Movies")
+
+st.caption(
+    f"Found {len(filtered_movies)} movies matching your filters."
+)
+
+if not filtered_movies.empty:
+
+    display_movies = filtered_movies.head(16)
+
+    st.caption(
+        "Showing up to 16 results. Change your filters "
+        "to explore more movies."
+    )
+
+    filter_movie_columns = st.columns(4)
+
+    for index, (_, movie) in enumerate(display_movies.iterrows()):
+
+        title = str(movie["title"])
+
+        with filter_movie_columns[index % 4]:
+
+            poster = get_movie_poster(title)
+
+            if not poster:
+                poster = poster_urls.get(title)
+
+            if poster:
+                st.image(poster, use_container_width=True)
+            else:
+                st.info("Poster unavailable")
+
+            st.markdown(f"**{html.escape(title)}**")
+
+            if pd.notna(movie["year"]):
+                st.caption(f"📅 {int(movie['year'])}")
+
+            if movie["rating_count"] > 0:
+                st.write(
+                    f"⭐ {movie['average_rating']:.2f}/5"
+                )
+                st.caption(
+                    f"{int(movie['rating_count'])} user ratings"
+                )
+            else:
+                st.caption("No user ratings available")
+
+else:
+
+    st.warning(
+        "No movies match these filters. "
+        "Try changing your selections!"
+    )
 
 
 # ---------------- MOVIE DETAILS ----------------
