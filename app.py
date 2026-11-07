@@ -704,6 +704,96 @@ else:
     )
 
 
+# ---------------- INDIAN CINEMA EXPLORER ----------------
+
+st.divider()
+
+st.header("🇮🇳 Indian Cinema")
+
+st.write(
+    "Explore movies from different Indian film industries!"
+)
+
+indian_languages = {
+    "Hindi": "hi",
+    "Telugu": "te",
+    "Tamil": "ta",
+    "Malayalam": "ml",
+    "Kannada": "kn",
+    "Bengali": "bn",
+    "Marathi": "mr",
+    "Punjabi": "pa"
+}
+
+selected_language = st.selectbox(
+    "🎞️ Choose a film industry:",
+    list(indian_languages.keys()),
+    key="indian_language"
+)
+
+if st.button("🍿 Explore Indian Movies"):
+
+    language_code = indian_languages[selected_language]
+
+    indian_movies = get_indian_movies(language_code)
+
+    st.session_state.indian_movies = indian_movies
+    st.session_state.indian_language_name = selected_language
+
+if "indian_movies" in st.session_state:
+
+    indian_movies = st.session_state.indian_movies
+
+    st.subheader(
+        f"🎬 Popular {st.session_state.indian_language_name} Movies"
+    )
+
+    if indian_movies:
+
+        indian_columns = st.columns(4)
+
+        for index, movie in enumerate(indian_movies[:20]):
+
+            with indian_columns[index % 4]:
+
+                title = movie.get("title", "Unknown Title")
+
+                poster_path = movie.get("poster_path")
+
+                if poster_path:
+                    poster = (
+                        "https://image.tmdb.org/t/p/w500"
+                        + poster_path
+                    )
+                    st.image(poster, use_container_width=True)
+                else:
+                    st.info("Poster unavailable")
+
+                st.markdown(f"**{html.escape(title)}**")
+
+                release_date = movie.get("release_date", "")
+
+                if release_date:
+                    st.caption(f"📅 {release_date[:4]}")
+
+                rating = movie.get("vote_average")
+
+                if rating:
+                    st.write(f"⭐ {rating:.1f}/10")
+
+                overview = movie.get("overview")
+
+                if overview:
+                    with st.expander("Read overview"):
+                        st.write(overview)
+
+    else:
+
+        st.warning(
+            "No movies found for this language. "
+            "Try another language!"
+        )
+
 # ---------------- MOVIE DETAILS ----------------
 
 st.divider()
