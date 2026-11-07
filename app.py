@@ -16,6 +16,21 @@ st.set_page_config(
 )
 
 
+# ---------------- SESSION STATE ----------------
+
+if "watchlist" not in st.session_state:
+    st.session_state.watchlist = []
+
+if "show_movie_details" not in st.session_state:
+    st.session_state.show_movie_details = False
+
+if "recommendations" not in st.session_state:
+    st.session_state.recommendations = None
+
+if "recommendation_error" not in st.session_state:
+    st.session_state.recommendation_error = False
+
+
 # ---------------- CUSTOM CSS ----------------
 
 st.markdown("""
@@ -329,22 +344,14 @@ if search_query.strip():
                     poster = poster_urls.get(title)
 
                 if poster:
-                    st.image(
-                        poster,
-                        use_container_width=True
-                    )
+                    st.image(poster, use_container_width=True)
                 else:
                     st.info("Poster unavailable")
 
-                st.markdown(
-                    f"**{html.escape(title)}**"
-                )
+                st.markdown(f"**{html.escape(title)}**")
 
     else:
-
-        st.warning(
-            "No movies found. Try another movie title!"
-        )
+        st.warning("No movies found. Try another movie title!")
 
 
 # ---------------- BROWSE BY GENRE ----------------
@@ -396,9 +403,7 @@ if "genres" in movies.columns:
             )
         ].sort_values("title")
 
-        st.caption(
-            f"{len(genre_movies)} movies available"
-        )
+        st.caption(f"{len(genre_movies)} movies available")
 
         genre_movies = genre_movies.head(12)
 
@@ -416,24 +421,17 @@ if "genres" in movies.columns:
                     poster = poster_urls.get(title)
 
                 if poster:
-                    st.image(
-                        poster,
-                        use_container_width=True
-                    )
+                    st.image(poster, use_container_width=True)
                 else:
                     st.info("Poster unavailable")
 
-                st.markdown(
-                    f"**{html.escape(title)}**"
-                )
+                st.markdown(f"**{html.escape(title)}**")
 
     else:
         st.warning("No genres found in the dataset.")
 
 else:
-    st.warning(
-        "Genre information is unavailable in the movie dataset."
-    )
+    st.warning("Genre information is unavailable in the movie dataset.")
 
 
 # ---------------- MOVIE DETAILS ----------------
@@ -442,9 +440,7 @@ st.divider()
 
 st.header("🎞️ Movie Details")
 
-st.write(
-    "Want to know more about a movie? Select one below!"
-)
+st.write("Want to know more about a movie? Select one below!")
 
 movie_list = movies["title"].tolist()
 
@@ -455,11 +451,7 @@ details_movie = st.selectbox(
 )
 
 if st.button("🔍 Show Movie Details"):
-
     st.session_state.show_movie_details = True
-
-if "show_movie_details" not in st.session_state:
-    st.session_state.show_movie_details = False
 
 if st.session_state.show_movie_details:
 
@@ -470,17 +462,13 @@ if st.session_state.show_movie_details:
     if not selected_details.empty:
 
         movie_row = selected_details.iloc[0]
-
         details = get_movie_details(details_movie)
 
         detail_columns = st.columns([1, 2])
 
         with detail_columns[0]:
 
-            poster = None
-
-            if details:
-                poster = details.get("poster")
+            poster = details.get("poster") if details else None
 
             if not poster:
                 poster = get_movie_poster(details_movie)
@@ -489,10 +477,7 @@ if st.session_state.show_movie_details:
                 poster = poster_urls.get(details_movie)
 
             if poster:
-                st.image(
-                    poster,
-                    use_container_width=True
-                )
+                st.image(poster, use_container_width=True)
             else:
                 st.info("Poster unavailable")
 
@@ -500,10 +485,7 @@ if st.session_state.show_movie_details:
 
             st.subheader(details_movie)
 
-            year_match = re.search(
-                r"\((\d{4})\)$",
-                details_movie
-            )
+            year_match = re.search(r"\((\d{4})\)$", details_movie)
 
             if details and details.get("release_date") != "Unknown":
                 release_year = details["release_date"][:4]
@@ -515,7 +497,6 @@ if st.session_state.show_movie_details:
             st.write(f"📅 **Release Year:** {release_year}")
 
             genres = str(movie_row["genres"]).replace("|", ", ")
-
             st.write(f"🎭 **Genres:** {genres}")
 
             st.markdown("### 📝 Overview")
@@ -526,14 +507,79 @@ if st.session_state.show_movie_details:
                 rating = details.get("rating")
 
                 if rating is not None:
-                    st.write(
-                        f"⭐ **TMDB Rating:** {rating:.1f}/10"
-                    )
+                    st.write(f"⭐ **TMDB Rating:** {rating:.1f}/10")
 
             else:
-                st.info(
-                    "Additional movie information is currently unavailable."
-                )
+                st.info("Additional movie information is currently unavailable.")
+
+
+# ---------------- MY WATCHLIST ----------------
+
+st.divider()
+
+st.header("⭐ My Watchlist")
+
+st.write("Save movies you want to watch later!")
+
+watchlist_movie = st.selectbox(
+    "Choose a movie to add:",
+    movie_list,
+    key="watchlist_movie"
+)
+
+if st.button("➕ Add to Watchlist"):
+
+    if watchlist_movie not in st.session_state.watchlist:
+
+        st.session_state.watchlist.append(watchlist_movie)
+
+        st.success(f"{watchlist_movie} added to your watchlist!")
+
+    else:
+
+        st.info("This movie is already in your watchlist!")
+
+
+# ---------------- DISPLAY WATCHLIST ----------------
+
+if st.session_state.watchlist:
+
+    st.subheader(
+        f"🎬 Your Saved Movies ({len(st.session_state.watchlist)})"
+    )
+
+    watchlist_columns = st.columns(3)
+
+    for index, title in enumerate(st.session_state.watchlist):
+
+        with watchlist_columns[index % 3]:
+
+            poster = get_movie_poster(title)
+
+            if not poster:
+                poster = poster_urls.get(title)
+
+            if poster:
+                st.image(poster, use_container_width=True)
+            else:
+                st.info("Poster unavailable")
+
+            st.markdown(f"**{html.escape(title)}**")
+
+            if st.button(
+                "❌ Remove",
+                key=f"remove_watchlist_{index}"
+            ):
+
+                st.session_state.watchlist.remove(title)
+
+                st.rerun()
+
+else:
+
+    st.info(
+        "Your watchlist is empty. Add a movie to get started!"
+    )
 
 
 # ---------------- USER INPUT ----------------
@@ -555,15 +601,6 @@ user_id = st.number_input(
     value=1,
     step=1
 )
-
-
-# ---------------- SESSION STATE ----------------
-
-if "recommendations" not in st.session_state:
-    st.session_state.recommendations = None
-
-if "recommendation_error" not in st.session_state:
-    st.session_state.recommendation_error = False
 
 
 # ---------------- RECOMMENDATION BUTTON ----------------
@@ -615,9 +652,7 @@ if st.session_state.recommendations is not None:
         title = str(movie["Movie"])
         score = movie["Hybrid Score"]
 
-        st.markdown(
-            f"### 🎬 {html.escape(title)}"
-        )
+        st.markdown(f"### 🎬 {html.escape(title)}")
 
         poster = get_movie_poster(title)
 
@@ -625,14 +660,9 @@ if st.session_state.recommendations is not None:
             poster = poster_urls.get(title)
 
         if poster:
-            st.image(
-                poster,
-                width=180
-            )
+            st.image(poster, width=180)
         else:
-            st.info(
-                f"Poster unavailable for {html.escape(title)}"
-            )
+            st.info(f"Poster unavailable for {html.escape(title)}")
 
         st.markdown(
             f"""
@@ -650,7 +680,6 @@ if st.session_state.recommendations is not None:
 
         st.divider()
 
-
 elif st.session_state.recommendation_error:
 
     st.error("Movie or User ID not found.")
@@ -660,9 +689,7 @@ elif st.session_state.recommendation_error:
 
 st.divider()
 
-st.caption(
-    "CINE PICK | Movie Recommendation System"
-)
+st.caption("CINE PICK | Movie Recommendation System")
 
 st.caption(
     "This product uses the TMDB API but is not endorsed or certified by TMDB."
