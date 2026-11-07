@@ -22,6 +22,9 @@ st.set_page_config(
 if "watchlist" not in st.session_state:
     st.session_state.watchlist = []
 
+if "indian_watchlist" not in st.session_state:
+    st.session_state.indian_watchlist = []
+
 if "show_movie_details" not in st.session_state:
     st.session_state.show_movie_details = False
 
@@ -30,6 +33,12 @@ if "recommendations" not in st.session_state:
 
 if "recommendation_error" not in st.session_state:
     st.session_state.recommendation_error = False
+
+if "indian_movies" not in st.session_state:
+    st.session_state.indian_movies = []
+
+if "indian_language_name" not in st.session_state:
+    st.session_state.indian_language_name = "Hindi"
 
 
 # ---------------- CUSTOM CSS ----------------
@@ -206,7 +215,8 @@ def get_movie_details(title):
         print("TMDB DETAILS ERROR:", repr(e))
         return None
 
-# ---------------- INDIAN MOVIE EXPLORER FUNCTION ----------------
+
+# ---------------- INDIAN MOVIE FETCHING FUNCTION ----------------
 
 @st.cache_data(ttl=3600)
 def get_indian_movies(language="hi", page=1):
@@ -296,6 +306,8 @@ movies["year"] = pd.to_numeric(
     errors="coerce"
 )
 
+movie_list = movies["title"].tolist()
+
 
 # ---------------- HEADING ----------------
 
@@ -315,7 +327,7 @@ with st.expander("ℹ️ About CINE PICK"):
 
     st.write("""
     CINE PICK is a movie recommendation system built using
-    the MovieLens dataset.
+    the MovieLens dataset and TMDB API.
 
     It combines two recommendation techniques:
 
@@ -323,6 +335,9 @@ with st.expander("ℹ️ About CINE PICK"):
     - Collaborative Filtering
 
     These are combined using a Hybrid Recommendation Model.
+
+    You can also explore Indian cinema, compare movies,
+    discover genres and create your own watchlists.
     """)
 
 
@@ -424,7 +439,6 @@ if search_query.strip():
                     st.info("Poster unavailable")
 
                 st.markdown(f"**{html.escape(title)}**")
-
 
     else:
         st.warning("No movies found. Try another movie title!")
@@ -574,10 +588,8 @@ minimum_rating = st.slider(
     key="minimum_rating"
 )
 
-# Start with all movies
 filtered_movies = movies.copy()
 
-# Genre filtering
 if selected_filter_genres:
 
     filtered_movies = filtered_movies[
@@ -589,7 +601,6 @@ if selected_filter_genres:
         )
     ]
 
-# Release year filtering
 filtered_movies = filtered_movies[
     filtered_movies["year"].between(
         selected_years[0],
@@ -597,12 +608,10 @@ filtered_movies = filtered_movies[
     )
 ]
 
-# Minimum rating filtering
 filtered_movies = filtered_movies[
     filtered_movies["average_rating"] >= minimum_rating
 ]
 
-# Sorting
 if sort_option == "Highest Rated":
 
     filtered_movies = filtered_movies.sort_values(
@@ -740,7 +749,7 @@ if st.button("🍿 Explore Indian Movies"):
     st.session_state.indian_movies = indian_movies
     st.session_state.indian_language_name = selected_language
 
-if "indian_movies" in st.session_state:
+if st.session_state.indian_movies:
 
     indian_movies = st.session_state.indian_movies
 
@@ -748,51 +757,139 @@ if "indian_movies" in st.session_state:
         f"🎬 Popular {st.session_state.indian_language_name} Movies"
     )
 
-    if indian_movies:
+    indian_columns = st.columns(4)
 
-        indian_columns = st.columns(4)
+    for index, movie in enumerate(indian_movies[:20]):
 
-        for index, movie in enumerate(indian_movies[:20]):
+        with indian_columns[index % 4]:
 
-            with indian_columns[index % 4]:
+            title = movie.get("title", "Unknown Title")
+            movie_id = movie.get("id")
+            poster_path = movie.get("poster_path")
+            overview = movie.get("overview")
+            rating = movie.get("vote_average")
 
-                title = movie.get("title", "Unknown Title")
+            if poster_path:
 
-                poster_path = movie.get("poster_path")
+                poster = (
+                    "https://image.tmdb.org/t/p/w500"
+                    + poster_path
+                )
 
-                if poster_path:
-                    poster = (
-                        "https://image.tmdb.org/t/p/w500"
-                        + poster_path
-                    )
-                    st.image(poster, use_container_width=True)
+                st.image(poster, use_container_width=True)
+
+            else:
+                st.info("Poster unavailable")
+
+            st.markdown(f"**{html.escape(title)}**")
+
+            release_date = movie.get("release_date", "")
+
+            if release_date:
+                st.caption(f"📅 {release_date[:4]}")
+
+            if rating:
+                st.write(f"⭐ {rating:.1f}/10")
+
+            if overview:
+
+                with st.expander("Read overview"):
+                    st.write(overview)
+
+            if st.button(
+                "⭐ Add to Watchlist",
+                key=f"indian_watch_{movie_id}"
+            ):
+
+                existing_ids = [
+                    item["id"]
+                    for item in st.session_state.indian_watchlist
+                ]
+
+                if movie_id not in existing_ids:
+
+                    st.session_state.indian_watchlist.append({
+                        "id": movie_id,
+                        "title": title,
+                        "poster": poster_path,
+                        "overview": overview or "Overview unavailable.",
+                        "rating": rating
+                    })
+
+                    st.success("Added to your Indian movie watchlist!")
+
                 else:
-                    st.info("Poster unavailable")
+                    st.info("Already in your watchlist!")
 
-                st.markdown(f"**{html.escape(title)}**")
+else:
 
-                release_date = movie.get("release_date", "")
+    st.info(
+        "Choose a language and click Explore Indian Movies "
+        "to discover Indian cinema!"
+    )
 
-                if release_date:
-                    st.caption(f"📅 {release_date[:4]}")
 
-                rating = movie.get("vote_average")
+# ---------------- INDIAN MOVIE WATCHLIST ----------------
 
-                if rating:
-                    st.write(f"⭐ {rating:.1f}/10")
+st.divider()
 
-                overview = movie.get("overview")
+st.header("⭐ My Indian Movie Watchlist")
 
-                if overview:
-                    with st.expander("Read overview"):
-                        st.write(overview)
+st.write("Your saved Indian cinema collection!")
 
-    else:
+if st.session_state.indian_watchlist:
 
-        st.warning(
-            "No movies found for this language. "
-            "Try another language!"
-        )
+    st.subheader(
+        f"🎬 Saved Indian Movies "
+        f"({len(st.session_state.indian_watchlist)})"
+    )
+
+    indian_watch_columns = st.columns(3)
+
+    for index, movie in enumerate(st.session_state.indian_watchlist):
+
+        with indian_watch_columns[index % 3]:
+
+            if movie["poster"]:
+
+                poster = (
+                    "https://image.tmdb.org/t/p/w500"
+                    + movie["poster"]
+                )
+
+                st.image(poster, use_container_width=True)
+
+            else:
+                st.info("Poster unavailable")
+
+            st.markdown(f"**{html.escape(movie['title'])}**")
+
+            if movie["rating"]:
+                st.write(f"⭐ {movie['rating']:.1f}/10")
+
+            with st.expander("Read overview"):
+                st.write(movie["overview"])
+
+            if st.button(
+                "❌ Remove",
+                key=f"remove_indian_{movie['id']}"
+            ):
+
+                st.session_state.indian_watchlist = [
+                    item
+                    for item in st.session_state.indian_watchlist
+                    if item["id"] != movie["id"]
+                ]
+
+                st.rerun()
+
+else:
+
+    st.info(
+        "Your Indian movie watchlist is empty. "
+        "Explore Indian Cinema and add movies!"
+    )
+
 
 # ---------------- MOVIE DETAILS ----------------
 
@@ -801,8 +898,6 @@ st.divider()
 st.header("🎞️ Movie Details")
 
 st.write("Want to know more about a movie? Select one below!")
-
-movie_list = movies["title"].tolist()
 
 details_movie = st.selectbox(
     "Choose a movie to explore:",
@@ -862,6 +957,7 @@ if st.session_state.show_movie_details:
             st.markdown("### 📝 Overview")
 
             if details:
+
                 st.write(details["overview"])
 
                 rating = details.get("rating")
@@ -870,7 +966,131 @@ if st.session_state.show_movie_details:
                     st.write(f"⭐ **TMDB Rating:** {rating:.1f}/10")
 
             else:
-                st.info("Additional movie information is currently unavailable.")
+                st.info(
+                    "Additional movie information is currently unavailable."
+                )
+
+
+# ---------------- MOVIE COMPARISON ----------------
+
+st.divider()
+
+st.header("🎬 Compare Two Movies")
+
+st.write(
+    "Can't decide which movie to watch? "
+    "Compare two movies side by side!"
+)
+
+comparison_columns = st.columns(2)
+
+with comparison_columns[0]:
+
+    movie_one = st.selectbox(
+        "Choose the first movie:",
+        movie_list,
+        key="compare_movie_one"
+    )
+
+with comparison_columns[1]:
+
+    movie_two = st.selectbox(
+        "Choose the second movie:",
+        movie_list,
+        index=1 if len(movie_list) > 1 else 0,
+        key="compare_movie_two"
+    )
+
+if st.button("⚖️ Compare Movies"):
+
+    if movie_one == movie_two:
+
+        st.warning("Please select two different movies!")
+
+    else:
+
+        first_movie = movies[
+            movies["title"] == movie_one
+        ].iloc[0]
+
+        second_movie = movies[
+            movies["title"] == movie_two
+        ].iloc[0]
+
+        first_details = get_movie_details(movie_one)
+        second_details = get_movie_details(movie_two)
+
+        compare_columns = st.columns(2)
+
+        comparison_data = [
+            (movie_one, first_movie, first_details),
+            (movie_two, second_movie, second_details)
+        ]
+
+        for index, (title, movie, details) in enumerate(comparison_data):
+
+            with compare_columns[index]:
+
+                st.subheader(title)
+
+                poster = (
+                    details.get("poster")
+                    if details else None
+                )
+
+                if not poster:
+                    poster = get_movie_poster(title)
+
+                if not poster:
+                    poster = poster_urls.get(title)
+
+                if poster:
+                    st.image(poster, use_container_width=True)
+                else:
+                    st.info("Poster unavailable")
+
+                year = movie["year"]
+
+                if pd.notna(year):
+                    st.write(f"📅 **Release Year:** {int(year)}")
+                else:
+                    st.write("📅 **Release Year:** Unknown")
+
+                genres = str(movie["genres"]).replace("|", ", ")
+
+                st.write(f"🎭 **Genres:** {genres}")
+
+                st.write(
+                    f"⭐ **Average MovieLens Rating:** "
+                    f"{movie['average_rating']:.2f}/5"
+                )
+
+                st.write(
+                    f"👥 **Number of User Ratings:** "
+                    f"{int(movie['rating_count'])}"
+                )
+
+                st.markdown("### 📝 Overview")
+
+                if details:
+
+                    st.write(details["overview"])
+
+                    tmdb_rating = details.get("rating")
+
+                    if tmdb_rating is not None:
+                        st.write(
+                            f"⭐ **TMDB Rating:** "
+                            f"{tmdb_rating:.1f}/10"
+                        )
+
+                else:
+
+                    st.info(
+                        "Additional movie information is unavailable."
+                    )
+
+        st.success("Movie comparison completed!")
 
 
 # ---------------- MY WATCHLIST ----------------
@@ -1039,6 +1259,7 @@ if st.session_state.recommendations is not None:
         )
 
         st.divider()
+
 
 elif st.session_state.recommendation_error:
 
