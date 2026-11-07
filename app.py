@@ -48,7 +48,6 @@ h1, h2, h3 {
     margin-top: 8px;
 }
 
-/* Genre button styling */
 .stButton > button {
     border-radius: 12px;
     border: 1px solid #c77dff;
@@ -56,7 +55,6 @@ h1, h2, h3 {
     color: white;
     font-weight: bold;
     min-height: 45px;
-    transition: 0.2s;
 }
 
 .stButton > button:hover {
@@ -95,9 +93,7 @@ def get_movie_poster(title):
             "accept": "application/json"
         }
 
-        params = {
-            "query": search_title
-        }
+        params = {"query": search_title}
 
         if year:
             params["year"] = year
@@ -110,7 +106,6 @@ def get_movie_poster(title):
         )
 
         response.raise_for_status()
-
         data = response.json()
 
         if data.get("results"):
@@ -220,6 +215,72 @@ with st.expander("📚 Mathematical Concepts Used"):
     )
 
 
+# ---------------- SEARCH MOVIES ----------------
+
+st.divider()
+
+st.header("🔎 Search Movies")
+
+st.write("Looking for a particular movie? Search for it here!")
+
+search_query = st.text_input(
+    "Enter a movie name:",
+    placeholder="e.g. Toy Story, Titanic, Jurassic Park...",
+    key="movie_search"
+)
+
+if search_query.strip():
+
+    search_results = movies[
+        movies["title"].str.contains(
+            search_query.strip(),
+            case=False,
+            na=False,
+            regex=False
+        )
+    ].head(12)
+
+    if not search_results.empty:
+
+        st.subheader("🎬 Search Results")
+
+        st.caption(
+            f"Found {len(search_results)} matching movies "
+            "(showing up to 12)."
+        )
+
+        search_columns = st.columns(4)
+
+        for index, (_, movie) in enumerate(search_results.iterrows()):
+
+            title = str(movie["title"])
+
+            with search_columns[index % 4]:
+
+                poster = get_movie_poster(title)
+
+                if not poster:
+                    poster = poster_urls.get(title)
+
+                if poster:
+                    st.image(
+                        poster,
+                        use_container_width=True
+                    )
+                else:
+                    st.info("Poster unavailable")
+
+                st.markdown(
+                    f"**{html.escape(title)}**"
+                )
+
+    else:
+
+        st.warning(
+            "No movies found. Try another movie title!"
+        )
+
+
 # ---------------- BROWSE BY GENRE ----------------
 
 st.divider()
@@ -244,7 +305,6 @@ if "genres" in movies.columns:
         if "selected_genre" not in st.session_state:
             st.session_state.selected_genre = all_genres[0]
 
-        # Genre buttons
         genre_columns = st.columns(4)
 
         for index, genre in enumerate(all_genres):
@@ -276,7 +336,6 @@ if "genres" in movies.columns:
 
         genre_movies = genre_movies.head(12)
 
-        # Four-column movie cards
         columns = st.columns(4)
 
         for index, (_, movie) in enumerate(genre_movies.iterrows()):
@@ -291,14 +350,11 @@ if "genres" in movies.columns:
                     poster = poster_urls.get(title)
 
                 if poster:
-
                     st.image(
                         poster,
                         use_container_width=True
                     )
-
                 else:
-
                     st.info("Poster unavailable")
 
                 st.markdown(
@@ -306,11 +362,9 @@ if "genres" in movies.columns:
                 )
 
     else:
-
         st.warning("No genres found in the dataset.")
 
 else:
-
     st.warning(
         "Genre information is unavailable in the movie dataset."
     )
@@ -407,14 +461,11 @@ if st.session_state.recommendations is not None:
             poster = poster_urls.get(title)
 
         if poster:
-
             st.image(
                 poster,
                 width=180
             )
-
         else:
-
             st.info(
                 f"Poster unavailable for {html.escape(title)}"
             )
