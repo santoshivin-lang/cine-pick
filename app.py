@@ -206,6 +206,43 @@ def get_movie_details(title):
         print("TMDB DETAILS ERROR:", repr(e))
         return None
 
+# ---------------- INDIAN MOVIE EXPLORER FUNCTION ----------------
+
+@st.cache_data(ttl=3600)
+def get_indian_movies(language="hi", page=1):
+
+    try:
+        api_key = st.secrets["TMDB_API_KEY"]
+
+        url = "https://api.themoviedb.org/3/discover/movie"
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "accept": "application/json"
+        }
+
+        params = {
+            "with_origin_country": "IN",
+            "with_original_language": language,
+            "sort_by": "popularity.desc",
+            "page": page
+        }
+
+        response = requests.get(
+            url,
+            headers=headers,
+            params=params,
+            timeout=15
+        )
+
+        response.raise_for_status()
+
+        return response.json().get("results", [])
+
+    except Exception as e:
+        print("INDIAN MOVIES ERROR:", repr(e))
+        return []
+
 
 # ---------------- LOAD MOVIELENS RATINGS ----------------
 
