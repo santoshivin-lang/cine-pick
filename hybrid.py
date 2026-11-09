@@ -66,6 +66,12 @@ def load_model():
         shape=(len(user_ids), len(movie_ids))
     )
 
+    # Keep interactions separately: a mean-centred rating may be zero.
+    rated_movies = csr_matrix(
+        (np.ones(len(ratings), dtype=bool), (rows, cols)),
+        shape=(len(user_ids), len(movie_ids))
+    )
+
     # 4. APPLY SVD
     svd = TruncatedSVD(
         n_components=20,
@@ -88,7 +94,8 @@ def load_model():
         movies,
         content_similarity,
         predicted_ratings,
-        user_to_index
+        user_to_index,
+        rated_movies
     )
 
 
@@ -107,7 +114,7 @@ def normalize(scores):
 # 6. HYBRID RECOMMENDATION
 def recommend_hybrid(movie_name, user_id=1):
 
-    movies, content_similarity, predicted_ratings, user_to_index = load_model()
+    movies, content_similarity, predicted_ratings, user_to_index, rated_movies = load_model()
 
     matches = movies[
         movies["title"].str.contains(
@@ -142,11 +149,13 @@ def recommend_hybrid(movie_name, user_id=1):
         0.5 * collab_scores
     )
 
-    # Exclude the selected movie
-    hybrid_scores[movie_index] = -1
+    # Exclude every rated movie as well as the selected seed movie.
+    eligible = ~rated_movies[user_index].toarray().ravel().astype(bool)
+    eligible[movie_index] = False
+    candidates = np.flatnonzero(eligible)
 
-    # Select the top 5 movies
-    top_movies = np.argsort(hybrid_scores)[::-1][:5]
+    # Rank only eligible movies, even if fewer than five remain.
+    top_movies = candidates[np.argsort(hybrid_scores[candidates])[::-1][:5]]
 
     results = []
 
@@ -159,4 +168,4 @@ def recommend_hybrid(movie_name, user_id=1):
             )
         })
 
-    return pd.DataFrame(results)
+    return pd.DataFrame(results, columns=["Movie", "Hybrid Score"])
