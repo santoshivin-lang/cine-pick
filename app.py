@@ -91,6 +91,16 @@ h1, h2, h3 {
 """, unsafe_allow_html=True)
 
 
+def normalize_movie_title(title):
+    """Convert MovieLens trailing articles to natural titles for TMDB."""
+    search_title = re.sub(r"\s*\(\d{4}\)$", "", title).strip()
+    for article in ("The", "An", "A"):
+        suffix = f", {article}"
+        if search_title.endswith(suffix):
+            return f"{article} {search_title[:-len(suffix)]}"
+    return search_title
+
+
 # ---------------- TMDB POSTER FUNCTION ----------------
 
 @st.cache_data(ttl=86400)
@@ -102,14 +112,7 @@ def get_movie_poster(title):
         year_match = re.search(r"\((\d{4})\)$", title)
         year = year_match.group(1) if year_match else None
 
-        search_title = re.sub(r"\s*\(\d{4}\)$", "", title)
-
-        if ", The" in search_title:
-            search_title = "The " + search_title.replace(", The", "")
-        elif ", A" in search_title:
-            search_title = "A " + search_title.replace(", A", "")
-        elif ", An" in search_title:
-            search_title = "An " + search_title.replace(", An", "")
+        search_title = normalize_movie_title(title)
 
         url = "https://api.themoviedb.org/3/search/movie"
 
@@ -161,14 +164,7 @@ def get_movie_details(title):
         year_match = re.search(r"\((\d{4})\)$", title)
         year = year_match.group(1) if year_match else None
 
-        search_title = re.sub(r"\s*\(\d{4}\)$", "", title)
-
-        if ", The" in search_title:
-            search_title = "The " + search_title.replace(", The", "")
-        elif ", A" in search_title:
-            search_title = "A " + search_title.replace(", A", "")
-        elif ", An" in search_title:
-            search_title = "An " + search_title.replace(", An", "")
+        search_title = normalize_movie_title(title)
 
         url = "https://api.themoviedb.org/3/search/movie"
 
@@ -288,7 +284,7 @@ poster_urls = {
 
 # ---------------- LOAD DATA ----------------
 
-movies, _, _, _ = load_model()
+movies, _, _, _, _ = load_model()
 
 rating_summary = load_movie_ratings()
 
@@ -409,7 +405,7 @@ if search_query.strip():
             na=False,
             regex=False
         )
-    ].head(12)
+    ]
 
     if not search_results.empty:
 
@@ -422,7 +418,7 @@ if search_query.strip():
 
         search_columns = st.columns(4)
 
-        for index, (_, movie) in enumerate(search_results.iterrows()):
+        for index, (_, movie) in enumerate(search_results.head(12).iterrows()):
 
             title = str(movie["title"])
 
@@ -836,6 +832,7 @@ st.divider()
 st.header("⭐ My Indian Movie Watchlist")
 
 st.write("Your saved Indian cinema collection!")
+st.caption("Your watchlist is saved only until you refresh or close this session.")
 
 if st.session_state.indian_watchlist:
 
@@ -1002,29 +999,33 @@ with comparison_columns[1]:
     )
 
 if st.button("⚖️ Compare Movies"):
+    st.session_state.comparison_movies = (movie_one, movie_two)
 
-    if movie_one == movie_two:
+if st.session_state.get("comparison_movies"):
+    compared_one, compared_two = st.session_state.comparison_movies
+
+    if compared_one == compared_two:
 
         st.warning("Please select two different movies!")
 
     else:
 
         first_movie = movies[
-            movies["title"] == movie_one
+            movies["title"] == compared_one
         ].iloc[0]
 
         second_movie = movies[
-            movies["title"] == movie_two
+            movies["title"] == compared_two
         ].iloc[0]
 
-        first_details = get_movie_details(movie_one)
-        second_details = get_movie_details(movie_two)
+        first_details = get_movie_details(compared_one)
+        second_details = get_movie_details(compared_two)
 
         compare_columns = st.columns(2)
 
         comparison_data = [
-            (movie_one, first_movie, first_details),
-            (movie_two, second_movie, second_details)
+            (compared_one, first_movie, first_details),
+            (compared_two, second_movie, second_details)
         ]
 
         for index, (title, movie, details) in enumerate(comparison_data):
@@ -1100,6 +1101,7 @@ st.divider()
 st.header("⭐ My Watchlist")
 
 st.write("Save movies you want to watch later!")
+st.caption("Your watchlist is saved only until you refresh or close this session.")
 
 watchlist_movie = st.selectbox(
     "Choose a movie to add:",
@@ -1168,10 +1170,16 @@ st.divider()
 
 st.subheader("🍿 Find Your Next Favourite Movie")
 
+def clear_recommendations():
+    st.session_state.recommendations = None
+    st.session_state.recommendation_error = False
+
+
 selected_movie = st.selectbox(
     "Choose a movie you like:",
     movie_list,
-    key="recommendation_movie"
+    key="recommendation_movie",
+    on_change=clear_recommendations
 )
 
 user_id = st.number_input(
@@ -1179,7 +1187,9 @@ user_id = st.number_input(
     min_value=1,
     max_value=6040,
     value=1,
-    step=1
+    step=1,
+    key="recommendation_user_id",
+    on_change=clear_recommendations
 )
 
 
