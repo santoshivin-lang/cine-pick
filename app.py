@@ -284,7 +284,7 @@ poster_urls = {
 
 # ---------------- LOAD DATA ----------------
 
-movies, _, _, _, _ = load_model()
+movies, _, _, _ = load_model()
 
 rating_summary = load_movie_ratings()
 

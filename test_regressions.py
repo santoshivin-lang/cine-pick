@@ -140,12 +140,13 @@ class Regressions(unittest.TestCase):
 
     def test_hybrid_excludes_rated_and_seed_with_fewer_than_five_candidates(self):
         # Includes a rated movie with a zero centred rating: it must remain excluded.
-        movies = pd.DataFrame({'title': ['Seed', 'Rated at mean', 'New A', 'New B']})
+        movies = pd.DataFrame({'movie_id': [10, 20, 30, 40], 'title': ['Seed', 'Rated at mean', 'New A', 'New B']})
         class Mask:
             def __getitem__(self, index):
                 return SimpleNamespace(toarray=lambda: np.array([[False, True, False, False]]))
         env = functions(HYBRID, {'normalize', 'recommend_hybrid'}, {'np': np, 'pd': pd})
-        env['load_model'] = lambda: (movies, np.eye(4), np.array([[5., 10., 3., 2.]]), {1: 0}, Mask())
+        env['load_model'] = lambda: (movies, np.eye(4), np.array([[5., 10., 3., 2.]]), {1: 0})
+        env['load_rated_movie_ids'] = lambda: {1: {20}}
         result = env['recommend_hybrid']('Seed', 1)
         self.assertEqual(set(result.Movie), {'New A', 'New B'})
         self.assertTrue(np.isfinite(result['Hybrid Score']).all())
@@ -153,12 +154,13 @@ class Regressions(unittest.TestCase):
         self.assertIsNone(env['recommend_hybrid']('Seed', 999))
 
     def test_hybrid_handles_no_eligible_candidates(self):
-        movies = pd.DataFrame({'title': ['Seed']})
+        movies = pd.DataFrame({'movie_id': [10], 'title': ['Seed']})
         class Mask:
             def __getitem__(self, index):
                 return SimpleNamespace(toarray=lambda: np.array([[True]]))
         env = functions(HYBRID, {'normalize', 'recommend_hybrid'}, {'np': np, 'pd': pd})
-        env['load_model'] = lambda: (movies, np.ones((1, 1)), np.ones((1, 1)), {1: 0}, Mask())
+        env['load_model'] = lambda: (movies, np.ones((1, 1)), np.ones((1, 1)), {1: 0})
+        env['load_rated_movie_ids'] = lambda: {1: {10}}
         result = env['recommend_hybrid']('Seed', 1)
         self.assertTrue(result.empty)
         self.assertEqual(list(result.columns), ['Movie', 'Hybrid Score'])

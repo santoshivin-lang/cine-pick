@@ -66,12 +66,6 @@ def load_model():
         shape=(len(user_ids), len(movie_ids))
     )
 
-    # Keep interactions separately: a mean-centred rating may be zero.
-    rated_movies = csr_matrix(
-        (np.ones(len(ratings), dtype=bool), (rows, cols)),
-        shape=(len(user_ids), len(movie_ids))
-    )
-
     # 4. APPLY SVD
     svd = TruncatedSVD(
         n_components=20,
@@ -94,9 +88,20 @@ def load_model():
         movies,
         content_similarity,
         predicted_ratings,
-        user_to_index,
-        rated_movies
+        user_to_index
     )
+
+
+@st.cache_data
+def load_rated_movie_ids():
+    """Keep explicit interactions independent of cached model return values."""
+    ratings = pd.read_csv(
+        "Dataset/ratings.dat",
+        sep="::",
+        engine="python",
+        names=["user_id", "movie_id", "rating", "timestamp"]
+    )
+    return ratings.groupby("user_id")["movie_id"].agg(set).to_dict()
 
 
 # 5. NORMALIZE SCORES
@@ -114,7 +119,7 @@ def normalize(scores):
 # 6. HYBRID RECOMMENDATION
 def recommend_hybrid(movie_name, user_id=1):
 
-    movies, content_similarity, predicted_ratings, user_to_index, rated_movies = load_model()
+    movies, content_similarity, predicted_ratings, user_to_index = load_model()
 
     matches = movies[
         movies["title"].str.contains(
@@ -150,7 +155,8 @@ def recommend_hybrid(movie_name, user_id=1):
     )
 
     # Exclude every rated movie as well as the selected seed movie.
-    eligible = ~rated_movies[user_index].toarray().ravel().astype(bool)
+    rated_ids = load_rated_movie_ids().get(user_id, set())
+    eligible = ~movies["movie_id"].isin(rated_ids).to_numpy()
     eligible[movie_index] = False
     candidates = np.flatnonzero(eligible)
 
